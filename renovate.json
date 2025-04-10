@@ -30,7 +30,7 @@
       "automerge": true,
       "platformAutomerge": true,
       "ignoreTests": false,
-      "stabilityDays": 0,
+      "minimumReleaseAge": null,
       "prCreation": "not-pending",
       "schedule": [
         "* 0-3 * * *"
