@@ -1,17 +1,17 @@
 # Kubernetes MCP Server
 
-An experimental Model Context Protocol (MCP) server that exposes Kubernetes resources to AI chat interfaces. This project demonstrates how to integrate Kubernetes functionality with AI assistants, allowing them to help analyze and manage your cluster resources.
+An experimental Model Context Protocol (MCP) server that exposes Kubernetes functionality to AI chat interfaces through kubectl. This project demonstrates how to integrate Kubernetes with AI assistants, allowing them to help analyze and manage your cluster resources using familiar kubectl commands.
 
 ## Overview
 
 This project is built on top of the amazing [mcpr](https://github.com/conikeec/mcpr) project by [@conikeec](https://github.com/conikeec), which provides a protocol for AI assistants to interact with external tools and services.
 
-The server currently implements a simple but powerful example: listing Kubernetes namespaces. However, the architecture is designed to be easily extended with more Kubernetes functionality.
+The server provides a single `kubectl` tool that can execute any kubectl command, giving AI assistants full access to your Kubernetes cluster's capabilities.
 
 ## Use Cases
 
-- **Resource Discovery**: Ask your AI assistant to list and describe resources in your cluster
-- **Troubleshooting**: Have the AI help analyze logs and resource states
+- **Resource Discovery**: Ask your AI assistant to list and describe resources using kubectl commands
+- **Troubleshooting**: Have the AI help analyze logs and resource states using kubectl
 - **Resource Management**: Get AI assistance in creating or modifying resources
 - **Documentation**: Ask the AI to explain what a particular resource does in your cluster
 - **Security Analysis**: Have the AI help identify potential security issues in your cluster configuration
@@ -19,27 +19,23 @@ The server currently implements a simple but powerful example: listing Kubernete
 ## Example Interaction
 
 ```
-User: Can you show me all namespaces in my cluster?
+User: Can you show me all pods in the default namespace?
 AI: I'll check that for you...
-[Uses the list_namespaces tool]
-Here are the namespaces in your cluster:
-- default
-- kube-system
-- kube-public
-- monitoring
+[Uses the kubectl tool with command "get pods -n default"]
+Here are the pods in the default namespace:
+NAME                     READY   STATUS    RESTARTS   AGE
+nginx-7c658794b9-2j4k5   1/1     Running   0          2d
 ```
 
 ## Future Possibilities
 
-The current implementation is just the beginning. Here are some potential extensions:
+The current implementation provides a foundation for many powerful interactions:
 
-- List and describe pods, deployments, services
-- Show logs for specific pods
-- Get resource utilization metrics
-- Check resource health and status
-- Analyze resource configurations
-- Suggest optimizations
-- Help with troubleshooting
+- Complex troubleshooting scenarios using multiple kubectl commands
+- Automated resource analysis and recommendations
+- Interactive debugging sessions
+- Security scanning and recommendations
+- Performance optimization suggestions
 
 ## Installation
 
@@ -59,43 +55,22 @@ cargo build --release
 ## Requirements
 
 - Rust 1.70 or later
+- kubectl installed and configured
 - Kubernetes cluster with appropriate permissions
 - kubeconfig configured for your cluster
 
 ## Configuration
 
-The server uses your default kubeconfig. Make sure you have the necessary permissions to access the resources you want to expose.
+The server uses your default kubeconfig and kubectl installation. Make sure you have the necessary permissions to execute the commands you want to run.
 
-## Development
+## Security Considerations
 
-To add new Kubernetes functionality:
+Since this server allows execution of arbitrary kubectl commands, it's important to:
 
-1. Define a new tool in the server configuration
-2. Implement the handler function
-3. Register the handler with the server
-
-Example:
-```rust
-let new_tool = Tool {
-    name: "list_pods".to_string(),
-    description: Some("Lists pods in a namespace".to_string()),
-    input_schema: ToolInputSchema {
-        r#type: "object".to_string(),
-        properties: Some(
-            [(
-                "namespace".to_string(),
-                json!({
-                    "type": "string",
-                    "description": "Namespace to list pods from"
-                }),
-            )]
-            .into_iter()
-            .collect::<HashMap<_, _>>(),
-        ),
-        required: Some(vec!["namespace".to_string()]),
-    },
-};
-```
+1. Run it with appropriate RBAC permissions
+2. Consider implementing command validation or whitelisting
+3. Monitor and audit command execution
+4. Use it in a controlled environment
 
 ## Acknowledgments
 

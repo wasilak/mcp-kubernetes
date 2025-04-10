@@ -1,5 +1,3 @@
-use k8s_openapi::api::core::v1::Namespace;
-use kube::{Client, api::Api};
 use log::info;
 use mcpr::{
     error::MCPError,
@@ -9,6 +7,7 @@ use mcpr::{
 };
 use serde_json::{Value, json};
 use std::collections::HashMap;
+use std::process::Command;
 
 #[tokio::main]
 async fn main() -> Result<(), MCPError> {
@@ -20,14 +19,24 @@ async fn main() -> Result<(), MCPError> {
     // Create a transport
     let transport = StdioTransport::new();
 
-    // Create a namespaces tool
-    let namespaces_tool = Tool {
-        name: "list_namespaces".to_string(),
-        description: Some("Lists all Kubernetes namespaces".to_string()),
+    // Create a kubectl tool
+    let kubectl_tool = Tool {
+        name: "kubectl".to_string(),
+        description: Some("Execute kubectl commands".to_string()),
         input_schema: ToolInputSchema {
             r#type: "object".to_string(),
-            properties: Some(HashMap::new()),
-            required: Some(Vec::new()),
+            properties: Some(
+                [(
+                    "command".to_string(),
+                    json!({
+                        "type": "string",
+                        "description": "The kubectl command to execute (e.g., 'get pods -n default')"
+                    }),
+                )]
+                .into_iter()
+                .collect::<HashMap<_, _>>(),
+            ),
+            required: Some(vec!["command".to_string()]),
         },
     };
 
@@ -35,33 +44,42 @@ async fn main() -> Result<(), MCPError> {
     let server_config = ServerConfig::new()
         .with_name("Kubernetes Server")
         .with_version("1.0.0")
-        .with_tool(namespaces_tool);
+        .with_tool(kubectl_tool);
 
     // Create the server
     let mut server = Server::new(server_config);
 
     // Register tool handlers
-    server.register_tool_handler("list_namespaces", |_params: Value| async move {
-        let client = Client::try_default().await.map_err(|e| {
-            MCPError::Protocol(format!("Failed to create Kubernetes client: {}", e))
-        })?;
+    server.register_tool_handler("kubectl", |params: Value| async move {
+        let command = params
+            .get("command")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| MCPError::Protocol("Missing command parameter".to_string()))?;
 
-        let namespaces: Api<Namespace> = Api::all(client);
-        let list = namespaces
-            .list(&Default::default())
-            .await
-            .map_err(|e| MCPError::Protocol(format!("Failed to list namespaces: {}", e)))?;
+        info!("Executing kubectl command: {}", command);
 
-        let names = list
-            .items
-            .into_iter()
-            .filter_map(|ns| ns.metadata.name)
-            .collect::<Vec<_>>();
+        // Split the command into parts
+        let parts: Vec<&str> = command.split_whitespace().collect();
+        if parts.is_empty() {
+            return Err(MCPError::Protocol("Empty command".to_string()));
+        }
 
-        info!("Listed {} namespaces", names.len());
+        // Execute the command
+        let output = Command::new("kubectl")
+            .args(&parts)
+            .output()
+            .map_err(|e| MCPError::Protocol(format!("Failed to execute kubectl: {}", e)))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(MCPError::Protocol(format!("kubectl error: {}", stderr)));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        info!("Command output: {}", stdout);
 
         Ok(json!({
-            "result": names
+            "result": stdout
         }))
     })?;
 
